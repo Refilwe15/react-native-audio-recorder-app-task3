@@ -10,7 +10,7 @@ import {
 export default function LandingScreen() {
   return (
     <View style={styles.container}>
-      {/* Text */}
+     {/* Title and subtitle section */}
       <View style={styles.textContainer}>
         <Text style={styles.title}>Record your audio</Text>
         <Text style={styles.subtitle}>
@@ -18,7 +18,7 @@ export default function LandingScreen() {
         </Text>
       </View>
 
-      {/* Image */}
+    {/* landing image */}
       <View style={styles.imageContainer}>
         <Image
           source={require('../assets/images/landing.png')}
@@ -27,7 +27,8 @@ export default function LandingScreen() {
         />
       </View>
 
-      {/* Button */}
+    {/* Get Started Button */}
+
       <TouchableOpacity style={styles.button}>
         <Text style={styles.buttonText}>Get Started</Text>
       </TouchableOpacity>
