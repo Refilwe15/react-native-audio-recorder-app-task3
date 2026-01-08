@@ -7,6 +7,9 @@ import {
   TouchableOpacity,
   Modal,
   Pressable,
+  TextInput,
+  Alert,
+  Animated,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,60 +31,75 @@ export default function LandingScreen() {
   const [recordedUri, setRecordedUri] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(0);
 
+  const [saveModalVisible, setSaveModalVisible] = useState(false);
+  const [fileName, setFileName] = useState('');
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  /* -------- START RECORDING -------- */
+  /* -------- WAVES -------- */
+  const wave1 = useRef(new Animated.Value(10)).current;
+  const wave2 = useRef(new Animated.Value(20)).current;
+  const wave3 = useRef(new Animated.Value(14)).current;
+  const waveLoop = useRef<Animated.CompositeAnimation | null>(null);
+
+  const startWaves = () => {
+    waveLoop.current = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(wave1, { toValue: 40, duration: 300, useNativeDriver: false }),
+          Animated.timing(wave1, { toValue: 10, duration: 300, useNativeDriver: false }),
+        ]),
+        Animated.sequence([
+          Animated.timing(wave2, { toValue: 55, duration: 400, useNativeDriver: false }),
+          Animated.timing(wave2, { toValue: 20, duration: 400, useNativeDriver: false }),
+        ]),
+        Animated.sequence([
+          Animated.timing(wave3, { toValue: 35, duration: 350, useNativeDriver: false }),
+          Animated.timing(wave3, { toValue: 14, duration: 350, useNativeDriver: false }),
+        ]),
+      ])
+    );
+    waveLoop.current.start();
+  };
+
+  const stopWaves = () => waveLoop.current?.stop();
+
+  /* -------- RECORD -------- */
   const startRecording = async () => {
-    try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (!permission.granted) return;
+    const permission = await Audio.requestPermissionsAsync();
+    if (!permission.granted) return;
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+    });
 
-      const rec = new Audio.Recording();
-      await rec.prepareToRecordAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      await rec.startAsync();
+    const rec = new Audio.Recording();
+    await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+    await rec.startAsync();
 
-      setRecording(rec);
-      setRecordingState('recording');
-      setSeconds(0);
+    setRecording(rec);
+    setRecordingState('recording');
+    setSeconds(0);
+    startWaves();
 
-      timerRef.current = setInterval(() => {
-        setSeconds(prev => prev + 1);
-      }, 1000);
-    } catch (e) {
-      console.log('Recording error', e);
-    }
+    timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000);
   };
 
-  /* -------- STOP RECORDING -------- */
   const stopRecording = async () => {
-    try {
-      if (!recording) return;
+    if (!recording) return;
 
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
+    await recording.stopAndUnloadAsync();
+    setRecordedUri(recording.getURI() ?? null);
+    setRecording(null);
+    setRecordingState('stopped');
+    stopWaves();
 
-      setRecordedUri(uri ?? null);
-      setRecording(null);
-      setRecordingState('stopped');
-
-      if (timerRef.current) clearInterval(timerRef.current);
-    } catch (e) {
-      console.log('Stop error', e);
-    }
+    if (timerRef.current) clearInterval(timerRef.current);
   };
 
-  /* -------- SAVE RECORDING -------- */
   const saveRecording = async () => {
-    if (!recordedUri) return;
-
-    const fileName = `Recording ${new Date().toLocaleString()}`;
+    if (!recordedUri || !fileName.trim()) return;
 
     const existing = await AsyncStorage.getItem('recordings');
     const recordings = existing ? JSON.parse(existing) : [];
@@ -94,25 +112,25 @@ export default function LandingScreen() {
       createdAt: new Date().toISOString(),
     });
 
-    await AsyncStorage.setItem(
-      'recordings',
-      JSON.stringify(recordings)
-    );
+    await AsyncStorage.setItem('recordings', JSON.stringify(recordings));
 
+    setSaveModalVisible(false);
+    setFileName('');
     setRecordingState('idle');
     setRecordedUri(null);
     setSeconds(0);
+
+    Alert.alert('Saved', 'Recording saved successfully ✅');
   };
 
-  /* -------- BUTTON HANDLER -------- */
   const onRecordPress = () => {
     if (recordingState === 'idle') startRecording();
     else if (recordingState === 'recording') stopRecording();
-    else saveRecording();
+    else setSaveModalVisible(true);
   };
 
-  const formatTime = (value: number) =>
-    new Date(value * 1000).toISOString().substring(11, 19);
+  const formatTime = (s: number) =>
+    new Date(s * 1000).toISOString().substring(11, 19);
 
   return (
     <View style={styles.container}>
@@ -133,12 +151,7 @@ export default function LandingScreen() {
               key={i}
               style={[
                 styles.tick,
-                {
-                  transform: [
-                    { rotate: `${i * 6}deg` },
-                    { translateY: -110 },
-                  ],
-                },
+                { transform: [{ rotate: `${i * 6}deg` }, { translateY: -110 }] },
               ]}
             />
           ))}
@@ -147,13 +160,21 @@ export default function LandingScreen() {
             <Image
               source={require('../assets/landing.png')}
               style={styles.micImage}
-              resizeMode="contain"
             />
           </View>
         </View>
 
+        {recordingState === 'recording' && (
+          <View style={styles.waves}>
+            <Animated.View style={[styles.wave, { height: wave1 }]} />
+            <Animated.View style={[styles.wave, { height: wave2 }]} />
+            <Animated.View style={[styles.wave, { height: wave3 }]} />
+          </View>
+        )}
+
         <Text style={styles.infoText}>{formatTime(seconds)}</Text>
 
+        {/* WAVEFORM */}
         <View style={styles.waveformContainer}>
           {Array.from({ length: 40 }).map((_, i) => (
             <View
@@ -162,19 +183,14 @@ export default function LandingScreen() {
                 styles.waveBar,
                 {
                   height: Math.random() * 25 + 10,
-                  backgroundColor:
-                    i < 26 ? '#a58132ff' : '#e6dcc7',
+                  backgroundColor: i < 26 ? '#a58132ff' : '#e6dcc7',
                 },
               ]}
             />
           ))}
-          <View style={styles.playhead} />
         </View>
 
-        <TouchableOpacity
-          style={styles.recordButton}
-          onPress={onRecordPress}
-        >
+        <TouchableOpacity style={styles.recordButton} onPress={onRecordPress}>
           <Text style={styles.recordButtonText}>
             {recordingState === 'idle' && 'Start Recording'}
             {recordingState === 'recording' && 'Stop Recording'}
@@ -183,12 +199,35 @@ export default function LandingScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* SAVE MODAL */}
+      <Modal transparent visible={saveModalVisible} animationType="fade">
+        <View style={styles.saveOverlay}>
+          <View style={styles.saveBox}>
+            <Text style={styles.saveTitle}>Save Recording As</Text>
+
+            <TextInput
+              placeholder="Enter file name"
+              value={fileName}
+              onChangeText={setFileName}
+              style={styles.input}
+            />
+
+            <View style={styles.saveActions}>
+              <TouchableOpacity onPress={() => setSaveModalVisible(false)}>
+                <Text style={styles.cancel}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={saveRecording}>
+                <Text style={styles.save}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* MENU */}
       <Modal transparent visible={menuVisible} animationType="slide">
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setMenuVisible(false)}
-        >
+        <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>
           <View style={styles.menuSheet}>
             <TouchableOpacity
               style={styles.menuItem}
@@ -197,9 +236,7 @@ export default function LandingScreen() {
                 navigation.navigate('RecordingScreen');
               }}
             >
-              <Text style={styles.menuItemText}>
-                Saved Recordings
-              </Text>
+              <Text style={styles.menuItemText}>Saved Recordings</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -218,43 +255,15 @@ export default function LandingScreen() {
 /* ---------------- STYLES ---------------- */
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    paddingTop: 50,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-  },
-  menu: {
-    fontSize: 24,
-    color: '#a58132ff',
-  },
-  headerTitle: {
-    fontSize: 18,
-    color: '#a58132ff',
-    fontWeight: '600',
-  },
-  imageContainer: {
-    flex: 1,
-    alignItems: 'center',
-    marginTop: 40,
-  },
-  tickContainer: {
-    width: 260,
-    height: 260,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tick: {
-    position: 'absolute',
-    width: 2,
-    height: 10,
-    backgroundColor: '#a58132ff',
-    opacity: 0.7,
-  },
+  container: { flex: 1, backgroundColor: '#fff', paddingTop: 50 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20 },
+  menu: { fontSize: 24, color: '#a58132ff' },
+  headerTitle: { fontSize: 18, color: '#a58132ff', fontWeight: '600' },
+
+  imageContainer: { flex: 1, alignItems: 'center', marginTop: 40 },
+  tickContainer: { width: 260, height: 260, alignItems: 'center', justifyContent: 'center' },
+  tick: { position: 'absolute', width: 2, height: 10, backgroundColor: '#a58132ff', opacity: 0.7 },
+
   outerCircle: {
     width: 180,
     height: 180,
@@ -264,77 +273,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  micImage: {
-    width: 70,
-    height: 70,
-  },
-  infoText: {
-    marginTop: 20,
-    fontSize: 20,
-    color: '#a58132ff',
-  },
+  micImage: { width: 70, height: 70 },
+
+  waves: { flexDirection: 'row', marginTop: 16, gap: 10 },
+  wave: { width: 6, borderRadius: 4, backgroundColor: '#a58132ff' },
+
   waveformContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    width: '85%',
-    height: 50,
-    marginTop: 40,
-    position: 'relative',
-    marginLeft: 50,
+    height: 40,
+    marginTop: 10,
+    gap: 2,
   },
   waveBar: {
     width: 3,
-    marginHorizontal: 2,
     borderRadius: 2,
   },
-  playhead: {
-    position: 'absolute',
-    left: '50%',
-    width: 2,
-    height: '100%',
-    backgroundColor: '#a58132ff',
-  },
+
+  infoText: { marginTop: 20, fontSize: 20, color: '#a58132ff' },
+
   recordButton: {
-    marginTop: 60,
+    marginTop: 50,
     paddingVertical: 14,
     paddingHorizontal: 40,
     borderRadius: 30,
     borderWidth: 1,
     borderColor: '#a58132ff',
   },
-  recordButtonText: {
-    color: '#a58132ff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalOverlay: {
+  recordButtonText: { color: '#a58132ff', fontSize: 16, fontWeight: '600' },
+
+  saveOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  menuSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingBottom: 20,
-  },
-  menuItem: {
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-  },
-  menuItemText: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
-  },
-  cancelItem: {
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-  },
-  cancelText: {
-    fontSize: 16,
-    color: '#a58132ff',
-    textAlign: 'center',
-    fontWeight: '600',
-  },
+  saveBox: { width: '85%', backgroundColor: '#fff', borderRadius: 16, padding: 20 },
+  saveTitle: { fontSize: 18, fontWeight: '600', marginBottom: 12 },
+  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 10, padding: 12 },
+
+  saveActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 20, gap: 20 },
+  cancel: { color: '#777', fontSize: 16 },
+  save: { color: '#a58132ff', fontSize: 16, fontWeight: '600' },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-end' },
+  menuSheet: { backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16 },
+  menuItem: { paddingVertical: 18, paddingHorizontal: 20 },
+  menuItemText: { fontSize: 16 },
+  cancelItem: { borderTopWidth: 1, borderTopColor: '#eee' },
+  cancelText: { fontSize: 16, color: '#a58132ff', textAlign: 'center', fontWeight: '600' },
 });
