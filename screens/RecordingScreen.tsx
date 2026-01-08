@@ -7,13 +7,13 @@ import {
   TouchableOpacity,
   Alert,
   TextInput,
-  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../App';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 interface RecordingItem {
   id: string;
@@ -43,7 +43,7 @@ export default function SavedRecordingsScreen() {
   /* -------- LOAD RECORDINGS -------- */
   const loadRecordings = async () => {
     const data = await AsyncStorage.getItem('recordings');
-    const parsed = data ? JSON.parse(data) : [];
+    const parsed: RecordingItem[] = data ? JSON.parse(data) : [];
     setRecordings(parsed);
     setFiltered(parsed);
   };
@@ -90,7 +90,7 @@ export default function SavedRecordingsScreen() {
     }
   };
 
-  /* -------- FAST FORWARD / REWIND -------- */
+  /* -------- SEEK -------- */
   const seek = async (seconds: number) => {
     if (!sound) return;
     const status = await sound.getStatusAsync();
@@ -124,6 +124,7 @@ export default function SavedRecordingsScreen() {
   const formatTime = (seconds: number) =>
     new Date(seconds * 1000).toISOString().substring(14, 19);
 
+  /* -------- ITEM UI -------- */
   const renderItem = ({ item }: { item: RecordingItem }) => (
     <View style={styles.card}>
       <View style={{ flex: 1 }}>
@@ -136,27 +137,45 @@ export default function SavedRecordingsScreen() {
         {playingId === item.id && (
           <View style={styles.controls}>
             <TouchableOpacity onPress={() => seek(-10)}>
-              <Text style={styles.controlText}>⏪ 10s</Text>
+              <Ionicons
+                name="play-back"
+                size={22}
+                color="#a58132ff"
+              />
             </TouchableOpacity>
 
             <TouchableOpacity onPress={() => seek(10)}>
-              <Text style={styles.controlText}>10s ⏩</Text>
+              <Ionicons
+                name="play-forward"
+                size={22}
+                color="#a58132ff"
+              />
             </TouchableOpacity>
           </View>
         )}
       </View>
 
-      <TouchableOpacity
-        style={styles.playButton}
-        onPress={() => togglePlay(item)}
-      >
-        <Text style={styles.playText}>
-          {playingId === item.id ? '⏸' : '▶'}
-        </Text>
+      <TouchableOpacity onPress={() => togglePlay(item)}>
+        <Ionicons
+          name={
+            playingId === item.id
+              ? 'pause-circle'
+              : 'play-circle'
+          }
+          size={36}
+          color="#a58132ff"
+        />
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => deleteRecording(item.id)}>
-        <Text style={styles.delete}>🗑</Text>
+      <TouchableOpacity
+        onPress={() => deleteRecording(item.id)}
+        style={{ marginLeft: 10 }}
+      >
+        <MaterialIcons
+          name="delete"
+          size={24}
+          color="#cc4444"
+        />
       </TouchableOpacity>
     </View>
   );
@@ -166,8 +185,13 @@ export default function SavedRecordingsScreen() {
       {/* HEADER */}
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.back}>←</Text>
+          <Ionicons
+            name="arrow-back"
+            size={24}
+            color="#a58132ff"
+          />
         </TouchableOpacity>
+
         <Text style={styles.header}>Saved Recordings</Text>
         <View style={{ width: 24 }} />
       </View>
@@ -187,16 +211,16 @@ export default function SavedRecordingsScreen() {
         contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Image
-              source={require('../assets/home.png')}
-              style={styles.emptyImage}
-              resizeMode="contain"
+            <Ionicons
+              name="mic-outline"
+              size={80}
+              color="#d6c9a8"
             />
             <Text style={styles.emptyText}>
-              No recordings yet.
+              No recordings yet
             </Text>
             <Text style={styles.emptySubText}>
-              Start recording your voice from the home screen.
+              Start recording from the home screen
             </Text>
           </View>
         }
@@ -205,7 +229,7 @@ export default function SavedRecordingsScreen() {
   );
 }
 
-/* ---------------- STYLES ---------------- */
+
 
 const styles = StyleSheet.create({
   container: {
@@ -218,10 +242,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  back: {
-    fontSize: 22,
-    color: '#a58132ff',
   },
   header: {
     fontSize: 22,
@@ -256,42 +276,21 @@ const styles = StyleSheet.create({
   },
   controls: {
     flexDirection: 'row',
-    marginTop: 8,
-    gap: 16,
-  },
-  controlText: {
-    fontSize: 14,
-    color: '#a58132ff',
-    fontWeight: '600',
-  },
-  playButton: {
-    marginHorizontal: 12,
-  },
-  playText: {
-    fontSize: 24,
-    color: '#a58132ff',
-  },
-  delete: {
-    fontSize: 18,
-    color: '#cc4444',
+    gap: 20,
+    marginTop: 10,
   },
 
-  /* EMPTY STATE */
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingBottom: 80,
   },
-  emptyImage: {
-    width: 180,
-    height: 180,
-    marginBottom: 20,
-  },
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
     color: '#a58132ff',
+    marginTop: 10,
   },
   emptySubText: {
     fontSize: 14,
