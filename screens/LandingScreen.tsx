@@ -143,7 +143,7 @@ export default function LandingScreen() {
     setRecordedUri(null);
     setSeconds(0);
 
-    Alert.alert("Saved", "Recording saved successfully ✅");
+    Alert.alert("Saved", "Recording saved successfully");
   };
 
   const onRecordPress = () => {

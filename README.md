@@ -1,9 +1,9 @@
-VOICE RECORDER APP (REACT NATIVE + EXPO)
+## VOICE RECORDER APP (REACT NATIVE + EXPO)
 
 A modern Voice Recorder mobile application built using React Native, Expo, and TypeScript.
 The app allows users to record audio, save recordings locally, play them back, search recordings, and delete recordings.
 
-FEATURES
+## FEATURES
 
 Record high-quality audio
 
@@ -27,7 +27,7 @@ Clean and modern UI
 
 Android APK build support
 
-TECH STACK
+## TECH STACK
 
 React Native
 
@@ -43,7 +43,7 @@ React Navigation
 
 Expo Vector Icons
 
-PROJECT STRUCTURE
+## PROJECT STRUCTURE
 
 .
 ├── assets/
@@ -57,7 +57,7 @@ PROJECT STRUCTURE
 ├── tsconfig.json
 └── README.txt
 
-GETTING STARTED
+## How to run the app
 
 Install dependencies
 
@@ -74,3 +74,9 @@ Scan the QR code using Expo Go on your Android device.
 PERMISSIONS
 
 The app requires Microphone access for recording audio.
+
+## Screenshot
+
+! [Recording Page] (assets/recordingPage.png)
+
+! [saved Recordings] (asssets/savedRecordings.png)

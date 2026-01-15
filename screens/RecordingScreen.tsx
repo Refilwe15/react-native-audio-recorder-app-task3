@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   TextInput,
+  StatusBar,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
@@ -23,9 +24,12 @@ interface RecordingItem {
   createdAt: string;
 }
 
+const PRIMARY_GOLD = '#a58132';
+const TEXT_DARK = '#2D2D2D';
+const BG_LIGHT = '#FDFCFB';
+
 export default function SavedRecordingsScreen() {
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const [recordings, setRecordings] = useState<RecordingItem[]>([]);
   const [filtered, setFiltered] = useState<RecordingItem[]>([]);
@@ -40,25 +44,22 @@ export default function SavedRecordingsScreen() {
     };
   }, []);
 
-  /* -------- LOAD RECORDINGS -------- */
   const loadRecordings = async () => {
     const data = await AsyncStorage.getItem('recordings');
     const parsed: RecordingItem[] = data ? JSON.parse(data) : [];
-    setRecordings(parsed);
-    setFiltered(parsed);
+    // Sort by newest first
+    const sorted = parsed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    setRecordings(sorted);
+    setFiltered(sorted);
   };
 
-  /* -------- SEARCH -------- */
   const onSearch = (text: string) => {
     setSearch(text);
     setFiltered(
-      recordings.filter(r =>
-        r.name.toLowerCase().includes(text.toLowerCase())
-      )
+      recordings.filter(r => r.name.toLowerCase().includes(text.toLowerCase()))
     );
   };
 
-  /* -------- PLAY / PAUSE -------- */
   const togglePlay = async (item: RecordingItem) => {
     try {
       if (playingId === item.id && sound) {
@@ -66,45 +67,31 @@ export default function SavedRecordingsScreen() {
         setPlayingId(null);
         return;
       }
-
       if (sound) {
         await sound.stopAsync();
         await sound.unloadAsync();
       }
-
-      const { sound: newSound } = await Audio.Sound.createAsync({
-        uri: item.uri,
-      });
-
+      const { sound: newSound } = await Audio.Sound.createAsync({ uri: item.uri });
       setSound(newSound);
       setPlayingId(item.id);
       await newSound.playAsync();
-
       newSound.setOnPlaybackStatusUpdate(status => {
-        if ('didJustFinish' in status && status.didJustFinish) {
-          setPlayingId(null);
-        }
+        if ('didJustFinish' in status && status.didJustFinish) setPlayingId(null);
       });
-    } catch (e) {
-      console.log('Playback error', e);
-    }
+    } catch (e) { console.log(e); }
   };
 
-  /* -------- SEEK -------- */
   const seek = async (seconds: number) => {
     if (!sound) return;
     const status = await sound.getStatusAsync();
     if (!status.isLoaded) return;
-
     let newPos = status.positionMillis + seconds * 1000;
-    newPos = Math.max(0, newPos);
-    await sound.setPositionAsync(newPos);
+    await sound.setPositionAsync(Math.max(0, newPos));
   };
 
-  /* -------- DELETE -------- */
-  const deleteRecording = async (id: string) => {
-    Alert.alert('Delete Recording', 'Are you sure?', [
-      { text: 'Cancel' },
+  const deleteRecording = (id: string) => {
+    Alert.alert('Delete Recording', 'This action cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
@@ -112,10 +99,7 @@ export default function SavedRecordingsScreen() {
           const updated = recordings.filter(r => r.id !== id);
           setRecordings(updated);
           setFiltered(updated);
-          await AsyncStorage.setItem(
-            'recordings',
-            JSON.stringify(updated)
-          );
+          await AsyncStorage.setItem('recordings', JSON.stringify(updated));
         },
       },
     ]);
@@ -124,104 +108,88 @@ export default function SavedRecordingsScreen() {
   const formatTime = (seconds: number) =>
     new Date(seconds * 1000).toISOString().substring(14, 19);
 
-  /* -------- ITEM UI -------- */
-  const renderItem = ({ item }: { item: RecordingItem }) => (
-    <View style={styles.card}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.title}>{item.name}</Text>
-        <Text style={styles.subtitle}>
-          {formatTime(item.duration)} •{' '}
-          {new Date(item.createdAt).toDateString()}
-        </Text>
+  const renderItem = ({ item }: { item: RecordingItem }) => {
+    const isPlaying = playingId === item.id;
+    return (
+      <View style={[styles.card, isPlaying && styles.activeCard]}>
+        <View style={styles.cardContent}>
+          <View style={styles.textContainer}>
+            <Text style={styles.title} numberOfLines={1}>{item.name}</Text>
+            <Text style={styles.subtitle}>
+              {formatTime(item.duration)} • {new Date(item.createdAt).toLocaleDateString()}
+            </Text>
+          </View>
 
-        {playingId === item.id && (
-          <View style={styles.controls}>
-            <TouchableOpacity onPress={() => seek(-10)}>
+          <View style={styles.actionRow}>
+            {isPlaying && (
+              <View style={styles.seekControls}>
+                <TouchableOpacity onPress={() => seek(-10)} style={styles.seekBtn}>
+                  <Ionicons name="play-back" size={20} color={PRIMARY_GOLD} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => seek(10)} style={styles.seekBtn}>
+                  <Ionicons name="play-forward" size={20} color={PRIMARY_GOLD} />
+                </TouchableOpacity>
+              </View>
+            )}
+            
+            <TouchableOpacity onPress={() => togglePlay(item)}>
               <Ionicons
-                name="play-back"
-                size={22}
-                color="#a58132ff"
+                name={isPlaying ? 'pause-circle' : 'play-circle'}
+                size={44}
+                color={PRIMARY_GOLD}
               />
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => seek(10)}>
-              <Ionicons
-                name="play-forward"
-                size={22}
-                color="#a58132ff"
-              />
+            <TouchableOpacity 
+              onPress={() => deleteRecording(item.id)} 
+              style={styles.deleteIcon}
+            >
+              <MaterialIcons name="delete-outline" size={24} color="#E57373" />
             </TouchableOpacity>
           </View>
-        )}
+        </View>
       </View>
-
-      <TouchableOpacity onPress={() => togglePlay(item)}>
-        <Ionicons
-          name={
-            playingId === item.id
-              ? 'pause-circle'
-              : 'play-circle'
-          }
-          size={36}
-          color="#a58132ff"
-        />
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={() => deleteRecording(item.id)}
-        style={{ marginLeft: 10 }}
-      >
-        <MaterialIcons
-          name="delete"
-          size={24}
-          color="#cc4444"
-        />
-      </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
       {/* HEADER */}
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color="#a58132ff"
-          />
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={28} color={TEXT_DARK} />
         </TouchableOpacity>
-
-        <Text style={styles.header}>Saved Recordings</Text>
-        <View style={{ width: 24 }} />
+        <Text style={styles.header}>Library</Text>
+        <View style={{ width: 40 }} /> 
       </View>
 
-      {/* SEARCH */}
-      <TextInput
-        placeholder="Search recordings..."
-        value={search}
-        onChangeText={onSearch}
-        style={styles.search}
-      />
+      {/* SEARCH BAR */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+        <TextInput
+          placeholder="Search your notes..."
+          placeholderTextColor="#999"
+          value={search}
+          onChangeText={onSearch}
+          style={styles.search}
+        />
+      </View>
 
       <FlatList
         data={filtered}
         keyExtractor={item => item.id}
         renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons
-              name="mic-outline"
-              size={80}
-              color="#d6c9a8"
-            />
-            <Text style={styles.emptyText}>
-              No recordings yet
-            </Text>
-            <Text style={styles.emptySubText}>
-              Start recording from the home screen
-            </Text>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="mic-outline" size={50} color={PRIMARY_GOLD} />
+            </View>
+            <Text style={styles.emptyText}>Empty Library</Text>
+            <Text style={styles.emptySubText}>Your saved voice notes will appear here.</Text>
           </View>
         }
       />
@@ -229,73 +197,142 @@ export default function SavedRecordingsScreen() {
   );
 }
 
-
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    paddingTop: 50,
-    paddingHorizontal: 20,
+    backgroundColor: BG_LIGHT,
+    paddingTop: 60,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    // Shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    // Elevation for Android
+    elevation: 3,
   },
   header: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#a58132ff',
+    fontSize: 24,
+    fontWeight: '800',
+    color: TEXT_DARK,
+    letterSpacing: -0.5,
   },
-  search: {
-    marginTop: 20,
-    marginBottom: 14,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  card: {
+  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8f6f1',
-    padding: 14,
-    borderRadius: 16,
+    backgroundColor: '#F1F1F1',
+    marginHorizontal: 20,
+    borderRadius: 15,
+    paddingHorizontal: 15,
+    marginBottom: 25,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  search: {
+    flex: 1,
+    height: 50,
+    fontSize: 16,
+    color: TEXT_DARK,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    marginBottom: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    // Shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  activeCard: {
+    borderColor: PRIMARY_GOLD,
+    backgroundColor: '#FFFBF2',
+  },
+  cardContent: {
+    flexDirection: 'column',
+  },
+  textContainer: {
     marginBottom: 12,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 17,
+    fontWeight: '700',
+    color: TEXT_DARK,
   },
   subtitle: {
-    fontSize: 12,
-    color: '#777',
+    fontSize: 13,
+    color: '#888',
     marginTop: 4,
+    fontWeight: '500',
   },
-  controls: {
+  actionRow: {
     flexDirection: 'row',
-    gap: 20,
-    marginTop: 10,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: '#F5F5F5',
+    paddingTop: 12,
   },
-
+  seekControls: {
+    flexDirection: 'row',
+    marginRight: 'auto',
+    gap: 15,
+  },
+  seekBtn: {
+    padding: 8,
+    backgroundColor: '#F9F9F9',
+    borderRadius: 10,
+  },
+  deleteIcon: {
+    marginLeft: 15,
+    padding: 8,
+  },
   emptyContainer: {
-    flex: 1,
+    marginTop: 100,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: 80,
+  },
+  emptyIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#F9F6EE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
   },
   emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#a58132ff',
-    marginTop: 10,
+    fontSize: 20,
+    fontWeight: '700',
+    color: TEXT_DARK,
   },
   emptySubText: {
-    fontSize: 14,
-    color: '#777',
-    marginTop: 6,
+    fontSize: 15,
+    color: '#999',
+    marginTop: 8,
     textAlign: 'center',
   },
 });
